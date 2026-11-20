@@ -8,7 +8,6 @@ Gemini Red Team dùng Google ADK trong agents/*.py — không đi qua file này.
 """
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -20,7 +19,6 @@ from core.config import (
     blue_client_kwargs,
     red_openai_client_kwargs,
 )
-from core.vertex_express import generate_vertex_content, is_vertex_express_key
 
 
 @dataclass
@@ -63,29 +61,16 @@ class OpenAIRunner:
         if block_msg is not None:
             return block_msg
 
-        if (
-            self.provider == "openrouter"
-            and not (self.client_kwargs or {}).get("api_key")
-            and is_vertex_express_key()
-        ):
-            text = await generate_vertex_content(
-                model="gemini-2.5-flash",
-                api_key=os.environ["GOOGLE_API_KEY"].strip(),
-                system_instruction=agent.instruction,
-                user_prompt=user_message,
-                temperature=self.temperature,
-            )
-        else:
-            client = self._client()
-            completion = client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": agent.instruction},
-                    {"role": "user", "content": user_message},
-                ],
-                temperature=self.temperature,
-            )
-            text = (completion.choices[0].message.content or "").strip()
+        client = self._client()
+        completion = client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": agent.instruction},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=self.temperature,
+        )
+        text = (completion.choices[0].message.content or "").strip()
 
         for hook in self.output_hooks:
             text = hook(text)

@@ -1,5 +1,32 @@
 # Day 11 — Controlled Agent Security (2026)
 
+## Thông tin bài nộp
+
+- **Họ và tên:** Lê Tuấn Đạt
+- **MSSV:** `2A202603949`
+- **Lớp:** `K5-L3B`
+
+### Cách chạy ngắn
+
+```powershell
+# 1. Kích hoạt venv & cài đặt thư viện
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+
+# 2. Cấu hình biến môi trường (copy từ .env.example → .env, điền OPENROUTER_API_KEY và key Red)
+Copy-Item .env.example .env
+
+# 3. Chạy từng checkpoint & kiểm tra
+python src/main.py --part 2
+python src/main.py --part 3
+python src/main.py --part 4
+pytest tests/smoke tests/public -q
+python scripts/grade.py --submission-dir . --out outputs/grade_report.json
+```
+
+---
+
 > 👤 **Hình thức:** bài tập **cá nhân** (1 người / 1 MSSV).  
 > 🎯 **Mục tiêu:** đóng vai **Blue Team** để học cách xây Guardrails phòng thủ, rồi đóng vai **Red Team** để tấn công agent **Red** hoặc **Red Advance**.  
 > ✅ Làm theo **Checkpoint 1 → 5** trong [`CHECKPOINTS.md`](CHECKPOINTS.md) · nộp theo [`SUBMISSION.md`](SUBMISSION.md).
