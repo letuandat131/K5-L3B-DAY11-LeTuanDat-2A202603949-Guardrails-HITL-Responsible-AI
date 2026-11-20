@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-20T15:35:39.648169+00:00",
+  "generated_at": "2026-11-20T16:40:43.335453+00:00",
   "submission_dir": "E:\\AI20K\\K5-L3-LAB-Day11-Guardrails-HITL-Responsible-AI",
   "technical_failure": false,
   "packaging": {
@@ -34,7 +34,7 @@
       "edge_blocked": 2,
       "edge_total": 4,
       "rate_limit_blocked": 2,
-      "rate_limit_sent": 5
+      "rate_limit_sent": 3
     },
     "red_team": {
       "llm_provider": "gemini",
@@ -47,7 +47,7 @@
   },
   "public_tests": {
     "returncode": 0,
-    "stdout": "..........                                                               [100%]\n10 passed in 1.00s\n",
+    "stdout": "..........                                                               [100%]\n10 passed in 1.12s\n",
     "stderr": "",
     "technical_failure": false
   },

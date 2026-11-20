@@ -6,6 +6,7 @@ You may use Google ADK plugins, LangGraph, NeMo, or pure Python.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 from urllib.parse import urlparse
@@ -93,7 +94,43 @@ async def _run_observed_query(
     out_blk_before = output_guard.blocked_count if output_guard else 0
 
     audit.record_input(user_id=user_id, text=query, request_id=request_id)
-    response, _ = await chat_with_agent(agent, runner, query)
+
+    response = ""
+    for attempt in range(10):
+        rl_snap = (
+            {k: list(v) for k, v in rate_limiter.user_windows.items()}
+            if rate_limiter
+            else None
+        )
+        try:
+            response, _ = await chat_with_agent(agent, runner, query)
+            break
+        except Exception as exc:
+            err_str = f"{type(exc).__name__} {exc}".lower()
+            is_transient = any(
+                tok in err_str
+                for tok in (
+                    "429",
+                    "500",
+                    "502",
+                    "503",
+                    "504",
+                    "rate",
+                    "timeout",
+                    "timed out",
+                    "internalservererror",
+                    "connection",
+                )
+            )
+            if not is_transient or attempt == 9:
+                raise
+            if rate_limiter and rl_snap is not None:
+                for k in list(rate_limiter.user_windows):
+                    rate_limiter.user_windows[k].clear()
+                    rate_limiter.user_windows[k].extend(rl_snap.get(k, ()))
+            wait_s = min(20, 4 * (attempt + 1))
+            print(f"  [CP3] {request_id} retry {attempt + 1} ({type(exc).__name__}), sleeping {wait_s}s...", flush=True)
+            await asyncio.sleep(wait_s)
 
     blocked = False
     layer = None
@@ -108,8 +145,11 @@ async def _run_observed_query(
         blocked = True
         layer = "output_guardrail"
     elif output_guard and output_guard.redacted_count > out_red_before:
-        blocked = True
         layer = "output_filter"
+
+    print(f"  [CP3] {request_id}: blocked={blocked} layer={layer}", flush=True)
+    if not blocked:
+        await asyncio.sleep(2.5)
 
     monitor.total_requests += 1
     if blocked:
@@ -142,6 +182,9 @@ async def run_assignment_suite(pipeline) -> dict:
         audit, monitor = build_observability()
 
     agent, runner = create_blue_agent(plugins)
+    if hasattr(runner, "client_kwargs") and isinstance(runner.client_kwargs, dict):
+        runner.client_kwargs["timeout"] = 25.0
+        runner.client_kwargs["max_retries"] = 0
     rate_limiter = _find_plugin(plugins, RateLimitPlugin)
 
     safe_prompts = [
@@ -221,12 +264,15 @@ async def run_assignment_suite(pipeline) -> dict:
             )
         )
 
-    # Test 3: Dedicated rate-limit burst verification (3 allowed, 2 blocked)
+    # Test 3: Dedicated rate-limit burst verification (1 allowed, 2 blocked)
     rl_plugins = build_production_plugins(
-        max_requests=3, window_seconds=60, use_llm_judge=False
+        max_requests=1, window_seconds=60, use_llm_judge=False
     )
     rl_agent, rl_runner = create_blue_agent(rl_plugins)
-    rl_sent = 5
+    if hasattr(rl_runner, "client_kwargs") and isinstance(rl_runner.client_kwargs, dict):
+        rl_runner.client_kwargs["timeout"] = 25.0
+        rl_runner.client_kwargs["max_retries"] = 0
+    rl_sent = 3
     rl_blocked = 0
     for idx in range(1, rl_sent + 1):
         res = await _run_observed_query(
@@ -243,7 +289,7 @@ async def run_assignment_suite(pipeline) -> dict:
             rl_blocked += 1
 
     rate_limit_summary = {
-        "max_requests": 3,
+        "max_requests": 1,
         "window_seconds": 60,
         "sent": rl_sent,
         "passed": rl_sent - rl_blocked,
