@@ -40,6 +40,7 @@ from core.config import (
     get_red_model,
     get_red_provider,
 )
+from core.vertex_express import VertexExpressNemoLLM, is_vertex_express_key
 
 # Lab mặc định tắt anonymous usage stats của NeMo; đặt =0 trong .env để bật lại.
 os.environ.setdefault("NEMO_GUARDRAILS_NO_USAGE_STATS", "1")
@@ -327,7 +328,18 @@ class NemoRailsGuard:
         nemoguardrails = require_nemo()
         from nemoguardrails import LLMRails
 
-        if config is None:
+        if (
+            llm is None
+            and get_red_provider() == PROVIDER_GEMINI
+            and is_vertex_express_key()
+        ):
+            llm = VertexExpressNemoLLM(
+                model_name=get_red_model(),
+                api_key=os.environ["GOOGLE_API_KEY"].strip(),
+            )
+            if config is None:
+                config = build_rails_config(include_model=False)
+        elif config is None:
             config = build_rails_config(include_model=llm is None)
         self.version = getattr(nemoguardrails, "__version__", "?")
         self.rails = LLMRails(config, llm=llm, verbose=verbose)
